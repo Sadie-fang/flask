@@ -1,31 +1,18 @@
+
 from flask import Flask, request, abort
 from linebot import LineBotApi, WebhookHandler
 from linebot.exceptions import InvalidSignatureError
-from linebot.models import MessageEvent, TextMessage, TextSendMessage
-
-import os
-import schedule
-import time
-from threading import Thread
+from linebot.models import MessageEvent, TextMessage, TextSendMessage, ImageSendMessage
 
 app = Flask(__name__)
 
-LINE_CHANNEL_SECRET = os.getenv('LINE_CHANNEL_SECRET')
-LINE_CHANNEL_ACCESS_TOKEN = os.getenv('LINE_CHANNEL_ACCESS_TOKEN')
-
-if LINE_CHANNEL_SECRET is None or LINE_CHANNEL_ACCESS_TOKEN is None:
-    print("Please set LINE_CHANNEL_SECRET and LINE_CHANNEL_ACCESS_TOKEN as environment variables.")
-    exit(1)
-
-line_bot_api = LineBotApi(LINE_CHANNEL_ACCESS_TOKEN)
-handler = WebhookHandler(LINE_CHANNEL_SECRET)
-
+line_bot_api = LineBotApi('sSNOXtlLZBqfShUWVZ+8E9G6vJ8oJ6DeCko6W3JMtuJ0LCX34nN5vZmR4clLSfjPOxJEYzxDcYiaRKKEambzjzBHE1HkkypKXmvVjyFhwcsSmiq1wbpg5/9rXGQp+DxA7i9T40E0DLJXvQut4N2z9wdB04t89/1O/w1cDnyilFU=')
+handler = WebhookHandler('1b50c8991709b0e4d6a9de7f131e7f81')
 
 @app.route("/callback", methods=['POST'])
 def callback():
     signature = request.headers['X-Line-Signature']
     body = request.get_data(as_text=True)
-    app.logger.info("Request body: " + body)
     try:
         handler.handle(body, signature)
     except InvalidSignatureError:
@@ -34,37 +21,30 @@ def callback():
 
 @handler.add(MessageEvent, message=TextMessage)
 def handle_message(event):
-    #group_id = event.source.group_id if hasattr(event.source, 'group_id') else None
-    #if group_id:
-    #    print("Group ID: ", group_id)
-
-    line_bot_api.reply_message(
-        event.reply_token,
-        TextSendMessage(text=event.message.text))
-
-def job():
-
-    with open("output.txt", "r") as f:
-        content = f.read()
+    plate_number = event.message.text
+    parking_spot, image_url = get_parking_spot_and_image(plate_number)
     
-    line_bot_api.push_meisage(
-        'YOUR_GROUP_ID',
-        TextSendMessage(text=content)
-    )
+    if parking_spot and image_url:
+        line_bot_api.reply_message(
+            event.reply_token,
+            [
+                TextSendMessage(text=f'?牌? {plate_number} ??的?位?是: {parking_spot}'),
+                ImageSendMessage(original_content_url=image_url, preview_image_url=image_url)
+            ]
+        )
+    else:
+        line_bot_api.reply_message(
+            event.reply_token,
+            TextSendMessage(text='未找到??的?位?或?片')
+        )
 
-def run_schedule():
-    while True:
-        schedule.run_pending()
-        time.sleep(1)
-
-#schedule.every().day.at("09:03").do(job)
-#schedule.every().day.at("12:03").do(job)
-#schedule.every().day.at("15:03").do(job)
-#schedule.every().day.at("18:03").do(job)
-
-#t= Thread(target=run_schedule)
-#t.start()
+def get_parking_spot_and_image(plate_number):
+    database = {
+        'ABC123': ('P1', 'https://example.com/parking_spot_1.jpg'),
+        'XYZ789': ('P2', 'https://example.com/parking_spot_2.jpg'),
+    }
+    return database.get(plate_number)
 
 if __name__ == "__main__":
-    app.run()
+    app.run(debug=True)
 
